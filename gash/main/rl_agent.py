@@ -16,14 +16,16 @@ class RLTrainer:
         action_count = {i: 0 for i in range(self.action_size)}
 
         for e in range(episodes):
-            state = self.env.reset()
+            state = torch.FloatTensor(self.env.reset()).unsqueeze(0)
             total_reward = 0
 
-            for time in range(500):
+            for _ in range(500):
                 action = self.agent.act(state)
-                action_count[action] += 1
+                action_idx = action.item()  # Convert action to integer for dictionary access
+                action_count[action_idx] += 1
 
-                next_state, reward, done = self.env.step(action)
+                next_state, reward, done = self.env.step(action_idx)
+                next_state = torch.FloatTensor(next_state).unsqueeze(0)
                 total_reward += reward
 
                 self.agent.train(state, action, reward, next_state, done)

@@ -61,8 +61,12 @@ class DQNAgent:
                 next_q_values = self.target_model(next_state)
                 target = reward + self.gamma * torch.max(next_q_values).item()
 
-            current_q = self.model(state)[0][action]
-            loss = self.criterion(current_q, torch.tensor([target], dtype=torch.float32))
+            # Ensure target is (1, 1) to match current_q's shape
+            target = torch.tensor([[target]], dtype=torch.float32)
+            current_q = self.model(state)[0][action].view(1, 1)
+            
+            # Calculate loss
+            loss = self.criterion(current_q, target)
             
             # Optimize the model
             self.optimizer.zero_grad()
@@ -88,8 +92,12 @@ class DQNAgent:
                 next_q_values = self.target_model(next_state)
                 target = reward + self.gamma * torch.max(next_q_values).item()
 
-            current_q = self.model(state)[0][action]
-            loss = self.criterion(current_q, torch.tensor([target], dtype=torch.float32))
+            # Ensure target is (1, 1) to match current_q's shape
+            target = torch.tensor([[target]], dtype=torch.float32)
+            current_q = self.model(state)[0][action].view(1, 1)
+            
+            # Calculate loss
+            loss = self.criterion(current_q, target)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
