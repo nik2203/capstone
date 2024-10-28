@@ -258,7 +258,3 @@ class UtilityCommands:
         else:
             parts.append(f"{minutes} min")
         return ', '.join(parts)
-
-
-
-  

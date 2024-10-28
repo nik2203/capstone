@@ -311,7 +311,13 @@ class SystemCommands:
                 },
                 "numa_node_0_cpu_list": "0-3",
                 "flags": [
-                    # ... list of flags ...
+                    "fpu", "vme", "de", "pse", "tsc", "msr", "pae", "mce", "cx8", "apic", "sep", "mtrr", "pge", "mca", "cmov",
+                    "pat", "pse36", "clflush", "mmx", "fxsr", "sse", "sse2", "ss", "ht", "tm", "pbe", "syscall", "nx", "pdpe1gb",
+                    "rdtscp", "lm", "constant_tsc", "arch_perfmon", "pebs", "bts", "rep_good", "nopl", "xtopology", "nonstop_tsc",
+                    "cpuid", "pni", "pclmulqdq", "dtes64", "monitor", "ds_cpl", "vmx", "smx", "est", "tm2", "ssse3", "sdbg",
+                    "fma", "cx16", "xtpr", "pdcm", "pcid", "dca", "sse4_1", "sse4_2", "x2apic", "movbe", "popcnt", "tsc_deadline_timer",
+                    "aes", "xsave", "avx", "f16c", "rdrand", "hypervisor", "lahf_lm", "abm", "3dnowprefetch", "epb", "cat_l3",
+                    "mba", "pti", "md_clear", "ibrs", "ibpb", "stibp", "ssbd", "vme"
                 ]
             }
             return output  # JSON formatted dictionary
@@ -326,8 +332,30 @@ class SystemCommands:
                     return "lscpu: option '-p' requires an argument\nTry 'lscpu --help' for more information.\n"
 
         # Prepare simulated output
+        # Place this within the simulated `cpu_info` dictionary
         cpu_info = {
-            # ... CPU info ...
+            "Architecture": "x86_64",
+            "CPU op-mode(s)": "32-bit, 64-bit",
+            "Byte Order": "Little Endian",
+            "CPU(s)": "8",
+            "On-line CPU(s) list": "0-7",
+            "Thread(s) per core": "2",
+            "Core(s) per socket": "4",
+            "Socket(s)": "1",
+            "NUMA node(s)": "1",
+            "Vendor ID": "GenuineIntel",
+            "CPU family": "6",
+            "Model": "158",
+            "Model name": "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz",
+            "Stepping": "10",
+            "CPU MHz": "1992.000",
+            "BogoMIPS": "3984.00",
+            "Virtualization": "VT-x",
+            "L1d cache": "32K",
+            "L1i cache": "32K",
+            "L2 cache": "256K",
+            "L3 cache": "8192K",
+            "NUMA node0 CPU(s)": "0-7"
         }
 
         # Filter output based on parse fields
