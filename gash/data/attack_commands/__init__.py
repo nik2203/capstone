@@ -8,6 +8,8 @@ from .utility import UtilityCommands
 
 import time  # Ensure you have necessary imports
 
+__all__ = ["FileSystemCommands", "NetworkCommands", "SystemCommands", "PackageCommands", "UtilityCommands"]
+
 class CommandHandler:
     def __init__(self):
         self.commands = {}

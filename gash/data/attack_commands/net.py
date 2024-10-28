@@ -3,11 +3,7 @@ import random
 import re
 import os  # Added import for os module
 import hashlib
-try:
-    from urllib.parse import urlparse  # Python 3
-except ImportError:
-    from urlparse import urlparse  # Python 2
-
+from urllib.parse import urlparse  # Python 3
 
 class NetworkCommands:
     def __init__(self, filesystem, cwd):
