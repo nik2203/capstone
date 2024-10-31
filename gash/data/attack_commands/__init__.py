@@ -5,25 +5,33 @@ from .net import NetworkCommands
 from .sys import SystemCommands
 from .package import PackageCommands
 from .utility import UtilityCommands
+from .malware import MalwareCommands
 
 import time  # Ensure you have necessary imports
 
-__all__ = ["FileSystemCommands", "NetworkCommands", "SystemCommands", "PackageCommands", "UtilityCommands"]
+__all__ = [
+    "FileSystemCommands", "NetworkCommands", "SystemCommands",
+    "PackageCommands", "UtilityCommands", "MalwareCommands"
+]
 
 class CommandHandler:
     def __init__(self):
         self.commands = {}
 
         # Initialize shared state
-        self.cwd = "/"  # Current working directory
-        self.filesystem = self.initialize_filesystem()
+        self.state = {
+            'cwd': "/",  # Current working directory
+            'filesystem': self.initialize_filesystem(),
+            'commands': self.commands
+        }
 
         # Initialize command groups with shared state
-        self.filesystem_commands = FileSystemCommands(self.filesystem, self.cwd)
-        self.network_commands = NetworkCommands(self.filesystem, self.cwd)
-        self.system_commands = SystemCommands(self.filesystem, self.cwd)
-        self.package_commands = PackageCommands(self.filesystem, self.cwd)
-        self.utility_commands = UtilityCommands(self.filesystem, self.cwd)
+        self.filesystem_commands = FileSystemCommands(self.state)
+        self.network_commands = NetworkCommands(self.state)
+        self.system_commands = SystemCommands(self.state)
+        self.package_commands = PackageCommands(self.state)
+        self.utility_commands = UtilityCommands(self.state)
+        self.malware_commands = MalwareCommands(self.state)
 
         # Aggregate all commands into a single dictionary
         self.commands.update(self.filesystem_commands.commands)
@@ -31,6 +39,7 @@ class CommandHandler:
         self.commands.update(self.system_commands.commands)
         self.commands.update(self.package_commands.commands)
         self.commands.update(self.utility_commands.commands)
+        self.commands.update(self.malware_commands.commands)
 
     def initialize_filesystem(self):
         # Initialize the virtual filesystem here
@@ -55,7 +64,7 @@ class CommandHandler:
             # Execute the command
             result = self.commands[cmd](cmd_parts, client_ip)
             # Update shared state
-            self.cwd = self.filesystem_commands.cwd  # Update cwd
+            self.state['cwd'] = self.filesystem_commands.cwd  # Update cwd
             return result
         else:
             return f"-bash: {command}: command not found\n"
