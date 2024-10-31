@@ -1,6 +1,7 @@
 import os
 import time
 import random
+from utils import llm
 import re
 
 class PackageCommands:
