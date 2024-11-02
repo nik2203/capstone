@@ -2,6 +2,30 @@
 
 import random
 import numpy as np
+import logging
+
+# Set up the logger
+def setup_logger(log_file='honeypot_interactions.log'):
+    logger = logging.getLogger('HoneypotLogger')
+    logger.setLevel(logging.INFO)
+
+    # Check if handlers are already added to avoid duplicate logs
+    if not logger.handlers:
+        # Create a file handler to log into the specified file
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.INFO)
+
+        # Define the logging format
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+
+        # Add the file handler to the logger
+        logger.addHandler(file_handler)
+
+    return logger
+
+# Initialize logger at the start of the file
+logger = setup_logger()
 
 class HoneypotEnv:
     def __init__(self, command_list):
@@ -14,11 +38,21 @@ class HoneypotEnv:
     def reset(self):
         self.current_command = random.choice(self.command_list)
         self.connected = True
+
+        # Log the reset state
+        logger.info(f"Environment reset. Starting command: {self.current_command}")
+
         return self._get_state()
 
     def step(self, action):
         if not self.connected:
+            logger.info("Attempted step while disconnected.")
             return self._get_state(), -10, True  # Penalty for disconnection
+
+        # Validate the action index
+        if action < 0 or action >= len(self.actions):
+            logger.error(f"Invalid action index: {action}")
+            return self._get_state(), -20, True  # Penalize for invalid action
 
         action_taken = self.actions[action]
         command = self.current_command
@@ -68,9 +102,13 @@ class HoneypotEnv:
         # Attacker disconnects based on random chance
         if random.random() < 0.05:  # Small chance of disconnection each step
             self.connected = False
+            logger.info(f"Attacker disconnected during interaction with command '{command}'.")
             return self._get_state(), -10, True  # Penalty if attacker disconnects
+
+        # Log the interaction details
+        logger.info(f"Command: {command}, Action Taken: {action_taken}, Reward: {reward}, Connection Status: {'Connected' if self.connected else 'Disconnected'}")
 
         return self._get_state(), reward, not self.connected
 
     def _get_state(self):
-        return np.array([1 if cmd in self.current_command else 0 for cmd in self.command_list])
+        return np.array([1 if cmd == self.current_command else 0 for cmd in self.command_list])
