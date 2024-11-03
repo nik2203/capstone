@@ -10,7 +10,7 @@ openai.api_key = os.getenv("API_KEY")
 class LLMCommandHandler:
     def __init__(self):
         self.history_file = "history.txt"
-        self.identity_file = "personalitySSH.yml"
+        self.identity_file = "personality.yml"
         self.prompt = self.load_initial_prompt()
 
     def load_initial_prompt(self):
@@ -35,7 +35,7 @@ class LLMCommandHandler:
             response = openai.Completion.create(
                 engine="gpt-4",
                 prompt=prompt,
-                max_tokens=100,
+                max_tokens=500,
                 temperature=0.02
             )
             return response.choices[0].text.strip()
@@ -44,8 +44,7 @@ class LLMCommandHandler:
 
     def handle_with_llm(self, command_name, command, client_ip):
         # Format the prompt to include command simulation request
-        prompt = (self.prompt +
-                  f"\nSimulate the behavior of the '{command_name}' command with arguments: {' '.join(command)}.")
+        prompt = (self.prompt + f"\nSimulate the behavior of the '{command_name}' command with arguments: {' '.join(command)}.")
 
         # Fetch response from LLM
         response = self.fetch_llm_response(prompt)

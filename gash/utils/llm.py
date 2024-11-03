@@ -9,7 +9,7 @@ def fetch_llm_response(self, prompt):
         response = openai.Completion.create(
             engine="gpt-4",
             prompt=prompt,
-            max_tokens=100,
+            max_tokens=800,
             temperature=0.02
         )
         return response.choices[0].text.strip()
