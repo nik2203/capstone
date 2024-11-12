@@ -140,6 +140,27 @@ class FileSystemCommands:
         self.filesystem = filesystem
         self.cwd = cwd  # Current working directory
 
+    # Helper methods
+    def get_permissions(self, mode, file_type):
+        perms = ['-'] * 10
+        if file_type == T_DIR:
+            perms[0] = 'd'
+        elif file_type == T_LINK:
+            perms[0] = 'l'
+        # User permissions
+        perms[1] = 'r' if mode & stat.S_IRUSR else '-'
+        perms[2] = 'w' if mode & stat.S_IWUSR else '-'
+        perms[3] = 'x' if mode & stat.S_IXUSR else '-'
+        # Group permissions
+        perms[4] = 'r' if mode & stat.S_IRGRP else '-'
+        perms[5] = 'w' if mode & stat.S_IWGRP else '-'
+        perms[6] = 'x' if mode & stat.S_IXGRP else '-'
+        # Other permissions
+        perms[7] = 'r' if mode & stat.S_IROTH else '-'
+        perms[8] = 'w' if mode & stat.S_IWOTH else '-'
+        perms[9] = 'x' if mode & stat.S_IXOTH else '-'
+        return ''.join(perms)
+
     def uid2name(self, uid):
         return 'root' if uid == 0 else f'user{uid}'
 
@@ -224,64 +245,27 @@ class FileSystemCommands:
                 name += f" -> {target}"
             output.append(f"{perms} {links} {owner} {group} {size} {mtime} {name}")
         return "\n".join(output)
-    
-    def get_permissions(self, mode, file_type):
-        """Generate Linux-like file permissions."""
-        perms = ['-'] * 10
-        if file_type == T_DIR:
-            perms[0] = 'd'
-        elif file_type == T_LINK:
-            perms[0] = 'l'
-
-        # User permissions
-        perms[1:4] = self._get_mode_triplet(mode, stat.S_IRUSR, stat.S_IWUSR, stat.S_IXUSR)
-        # Group permissions
-        perms[4:7] = self._get_mode_triplet(mode, stat.S_IRGRP, stat.S_IWGRP, stat.S_IXGRP)
-        # Other permissions
-        perms[7:10] = self._get_mode_triplet(mode, stat.S_IROTH, stat.S_IWOTH, stat.S_IXOTH)
-        return ''.join(perms)
-
-    def _get_mode_triplet(self, mode, read_bit, write_bit, exec_bit):
-        """Generate a permission triplet for a given mode."""
-        return ['r' if mode & read_bit else '-', 'w' if mode & write_bit else '-', 'x' if mode & exec_bit else '-']
 
     def command_cd(self, command, client_ip):
-        """
-        Implementation of the 'cd' command.
-        """
         if len(command) < 2:
-            # Default to home directory if no argument is provided
             self.cwd = "/home"
-            return "Changed to home directory.\n"
         else:
             path = self.filesystem.resolve_path(command[1], self.cwd)
             if self.filesystem.is_dir(path):
-                # Change the current working directory
                 self.cwd = path
-                return f"Changed directory to '{path}'.\n"
             else:
-                # Return an error if the directory does not exist
                 return f"bash: cd: {command[1]}: No such file or directory\n"
-
+        return ""
 
     def command_mkdir(self, command, client_ip):
-        """
-        Create a directory at the specified path.
-        """
         if len(command) < 2:
             return "mkdir: missing operand\n"
-        
         path = self.filesystem.resolve_path(command[1], self.cwd)
-        
-        try:
-            success = self.filesystem.mkdir(path, uid=0, gid=0, size=4096, mode=0o755)
-            if success:
-                return f"Directory '{command[1]}' created successfully.\n"
-            else:
-                return f"mkdir: cannot create directory '{command[1]}': Permission denied\n"
-        except Exception as e:
-            return f"mkdir: error creating directory '{command[1]}': {str(e)}\n"
-
+        success = self.filesystem.mkdir(path, uid=0, gid=0, size=4096, mode=0o755)
+        if success:
+            return ""
+        else:
+            return f"mkdir: cannot create directory '{command[1]}': Permission denied\n"
 
     def command_rmdir(self, command, client_ip):
         if len(command) < 2:

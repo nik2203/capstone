@@ -67,18 +67,30 @@ class CommandHandler:
         return data.get("personality", {}).get("prompt", "")
 
     def execute(self, command, client_ip):
+        """
+        Execute the command using rule-based logic, RL model, or LLM as needed.
+        """
         cmd_parts = command.strip().split()
         cmd = cmd_parts[0] if cmd_parts else ''
         
         logging.info(f"Processing command: {cmd} from IP: {client_ip}")
 
+        # Reload personality for every session
+        self.personality = self.load_personality("utils/personality.yml")
+        if not self.session_context.has_personality():
+            self.session_context.set_personality(self.personality)
+
         if cmd in self.commands:
             if cmd in self.rule_based_allow:
                 logging.info(f"Rule-based decision: Always allow command '{cmd}'.")
-                return "allow", self.commands[cmd](cmd_parts, client_ip)
+                return "allow", self.format_output(self.commands[cmd](cmd_parts, client_ip))
 
+            if self.rl_trainer and self.rl_trainer.agent:
+                action = self.get_rl_model_decision(cmd)
+            else:
+                logging.warning(f"RL Trainer not initialized. Defaulting to static response for '{cmd}'.")
+                action = "allow"
 
-            action = self.get_rl_model_decision(cmd)
             static_response = self.commands[cmd](cmd_parts, client_ip)
             logging.info(f"RL Model action: {action}, Static response: {static_response}")
 
@@ -86,11 +98,24 @@ class CommandHandler:
                 prompt = self.create_prompt(cmd, static_response)
                 dynamic_response = self.openai_config.get_dynamic_response(prompt)
                 logging.info(f"Dynamic response: {dynamic_response}")
-                return action, dynamic_response
+                return action, self.format_output(dynamic_response)
 
-            return action, static_response
-        else:
-            return "not_found", f"-bash: {command}: command not found\n"
+            return action, self.format_output(static_response)
+
+        # Handle undefined commands using LLM
+        prompt = self.create_prompt(cmd, "Undefined command.")
+        dynamic_response = self.openai_config.get_dynamic_response(prompt)
+        logging.info(f"Dynamic response for undefined command: {dynamic_response}")
+        return "llm", self.format_output(dynamic_response)
+
+    def format_output(self, output):
+        """
+        Standardize the output formatting for consistency.
+        """
+        if isinstance(output, str):
+            lines = output.splitlines()
+            return "\n".join(line.strip() for line in lines)
+        return str(output)
 
     
     def reset_context(self):
