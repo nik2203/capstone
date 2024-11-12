@@ -753,4 +753,3 @@ class SystemCommands:
         if '-w' in args:
             return "halt: simulating shutdown\n"
         return "halt: system is going down\n"
-    

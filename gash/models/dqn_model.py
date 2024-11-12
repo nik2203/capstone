@@ -1,5 +1,3 @@
-# models/dqn_model.py
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -26,8 +24,7 @@ class DQNAgent:
         self.target_model = DQNModel(state_size, action_size)
         self.update_target_network()
 
-        # Hyperparameters
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.00025)  # Reduced learning rate for stability
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.00025)
         self.criterion = nn.MSELoss()
         self.epsilon = 1.0
         self.epsilon_decay = 0.995
@@ -52,52 +49,31 @@ class DQNAgent:
         if len(self.memory) < self.batch_size:
             return
         
-        # Sample mini-batch from experience replay buffer
         minibatch = random.sample(self.memory, self.batch_size)
         
         for state, action, reward, next_state, done in minibatch:
-            target = reward
-            if not done:
-                next_q_values = self.target_model(next_state)
-                target = reward + self.gamma * torch.max(next_q_values).item()
-
-            # Ensure target is (1, 1) to match current_q's shape
+            target = reward + self.gamma * torch.max(self.target_model(next_state)).item() * (1 - done)
             target = torch.tensor([[target]], dtype=torch.float32)
             current_q = self.model(state)[0][action].view(1, 1)
             
-            # Calculate loss
             loss = self.criterion(current_q, target)
-            
-            # Optimize the model
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
-        # Update epsilon for exploration
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-        # Update target model periodically
-        if done:
-            self.update_target_network()
+    def save_model(self, path="saved_model.pth"):
+        torch.save(self.model.state_dict(), path)
+
+    def load_model(self, path="saved_model.pth"):
+        self.model.load_state_dict(torch.load(path))
+        self.update_target_network()  # Update target model to match the loaded model
 
     def replay(self):
-        if len(self.memory) < self.batch_size:
-            return
-
-        minibatch = random.sample(self.memory, self.batch_size)
-        for state, action, reward, next_state, done in minibatch:
-            target = reward
-            if not done:
-                next_q_values = self.target_model(next_state)
-                target = reward + self.gamma * torch.max(next_q_values).item()
-
-            # Ensure target is (1, 1) to match current_q's shape
-            target = torch.tensor([[target]], dtype=torch.float32)
-            current_q = self.model(state)[0][action].view(1, 1)
-            
-            # Calculate loss
-            loss = self.criterion(current_q, target)
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+        """Prints Q-values for the current memory for debugging purposes."""
+        print("Replay Memory Sample Q-values:")
+        for state, action, _, _, _ in self.memory:
+            q_values = self.model(state)
+            print("Q-values:", q_values)
