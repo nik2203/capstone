@@ -9,7 +9,7 @@ class OpenAIConfig:
         try:
             # Use the updated API to fetch a response
             response = openai.ChatCompletion.create(
-                model="gpt-4o",  # Replace with 'gpt-3.5-turbo' if needed
+                model="gpt-4",  # Replace with 'gpt-3.5-turbo' if needed
                 messages=[
                     {"role": "system", "content": "You are a Linux terminal. Provide plain, realistic output for commands without formatting."},
                     {"role": "user", "content": prompt}

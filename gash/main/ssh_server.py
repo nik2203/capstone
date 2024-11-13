@@ -103,7 +103,6 @@ def handle_client(client_socket):
 
     try:
         server.event.set()
-        channel.send("\r\nWelcome to the honeypot SSH server!\r\n")
         channel.send("$ ")
 
         cmd_buffer = ''
