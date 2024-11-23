@@ -77,18 +77,12 @@ class CommandHandler:
                 logging.info(f"Rule-based decision: Always allow command '{cmd}'.")
                 return "allow", self.commands[cmd](cmd_parts, client_ip)
 
-
             action = self.get_rl_model_decision(cmd)
             static_response = self.commands[cmd](cmd_parts, client_ip)
             logging.info(f"RL Model action: {action}, Static response: {static_response}")
 
-            if action in ["delay", "fake"]:
-                prompt = self.create_prompt(cmd, static_response)
-                dynamic_response = self.openai_config.get_dynamic_response(prompt)
-                logging.info(f"Dynamic response: {dynamic_response}")
-                return action, dynamic_response
-
-            return action, static_response
+            return self.handle_action(action, cmd, cmd_parts, client_ip)
+        
         else:
             return "not_found", f"-bash: {command}: command not found\n"
 
@@ -116,24 +110,42 @@ class CommandHandler:
         action_name = actions[action]
 
         if action_name == "allow":
-            return self.commands[cmd](cmd_parts, client_ip)
-        elif action_name == "block":
-            return f"{cmd}: Permission denied"
-        elif action_name in ["delay", "fake"]:
-            if action_name == "delay":
-                time.sleep(self.delay_time)
-            return self.get_dynamic_openai_response(cmd, cmd_parts, client_ip)
-        elif action_name == "insult":
-            return "Nice try."
-
-    def get_dynamic_openai_response(self, cmd, cmd_parts, client_ip):
-        try:
+            # return self.commands[cmd](cmd_parts, client_ip)
             static_response = self.commands[cmd](cmd_parts, client_ip)
+            if static_response == "":
+                return "allow", ""  # Return an empty string for successful silent commands
+            print(cmd)
+            dynamic_response = self.get_dynamic_openai_response(cmd, static_response)
+            return "allow", dynamic_response  # Return action and dynamic response
+
+        elif action_name == "block":
+            static_response = self.commands[cmd](cmd_parts, client_ip)
+            dynamic_response = self.get_dynamic_openai_response(cmd, static_response)  # Go through API for context
+            return "block", f"{cmd}: Permission denied"
+        
+        elif action_name in ["delay", "fake"]:
+                if action_name == "delay":
+                    time.sleep(self.delay_time)
+                # Pass the command through the OpenAI API and return its response
+                static_response = self.commands[cmd](cmd_parts, client_ip)
+                dynamic_response = self.get_dynamic_openai_response(cmd, static_response)
+                return action_name, dynamic_response
+        
+        elif action_name == "insult":
+            static_response = self.commands[cmd](cmd_parts, client_ip)
+            dynamic_response = self.get_dynamic_openai_response(cmd, static_response) 
+            return "insult", "Nice try"
+
+    def get_dynamic_openai_response(self, cmd, static_response):
+        try:
+            # Generate the prompt using the static response
             prompt = self.create_prompt(cmd, static_response)
-            return self.openai_config.get_dynamic_response(prompt)
+            # Get the dynamic response from the API
+            dynamic_response = self.openai_config.get_dynamic_response(prompt)
+            return dynamic_response  # Return the dynamic response to be displayed
         except Exception as e:
             logging.error(f"Error generating dynamic response for '{cmd}': {e}")
-            return "Error processing the command dynamically."
+            return "error", "Error processing the command dynamically."
 
     def create_prompt(self, command, static_response):
         if not self.personality:
@@ -144,12 +156,17 @@ class CommandHandler:
             self.session_context.set_personality(self.personality)
 
         context = self.session_context.get_context()
+
         prompt = (
-            f"System Personality:\n{self.session_context.get_personality()}\n\n"
+            f"System Personality: You are a strict Linux OS terminal. "
+            f"Act and respond ONLY like a Linux terminal would respond. "
+            f"Do NOT include system messages, login greetings, or anything else. "
+            f"If the response is empty then display nothing. "
+            f"Only show the response to the command entered by the user.\n\n"
             f"Session Context:\n{context}\n\n"
             f"Command: {command}\n"
             f"Static Response: {static_response}\n\n"
-            f"Provide a realistic and context-aware response."
+            f"Provide ONLY the command output, nothing more."
         )
         return prompt
 

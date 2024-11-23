@@ -135,6 +135,7 @@ class FileSystemCommands:
             "tail": self.command_tail,
             "chmod": self.command_chmod,
             "chown": self.command_chown,
+            "pwd": self.command_pwd
         }
 
         self.filesystem = filesystem
@@ -186,6 +187,13 @@ class FileSystemCommands:
                     output.append(file_node[A_NAME])
 
         return "\n".join(output) + "\n"
+
+    def command_pwd(self, command, client_ip):
+        """
+        Print the current working directory.
+        """
+        return self.cwd + "\n"  # Return current directory, no other output
+
 
     def format_simple_list(self, files, show_all):
         names = []
@@ -252,13 +260,13 @@ class FileSystemCommands:
         if len(command) < 2:
             # Default to home directory if no argument is provided
             self.cwd = "/home"
-            return "Changed to home directory.\n"
+            return ""
         else:
             path = self.filesystem.resolve_path(command[1], self.cwd)
             if self.filesystem.is_dir(path):
                 # Change the current working directory
                 self.cwd = path
-                return f"Changed directory to '{path}'.\n"
+                return ""
             else:
                 # Return an error if the directory does not exist
                 return f"bash: cd: {command[1]}: No such file or directory\n"
@@ -276,7 +284,7 @@ class FileSystemCommands:
         try:
             success = self.filesystem.mkdir(path, uid=0, gid=0, size=4096, mode=0o755)
             if success:
-                return f"Directory '{command[1]}' created successfully.\n"
+                return ""
             else:
                 return f"mkdir: cannot create directory '{command[1]}': Permission denied\n"
         except Exception as e:

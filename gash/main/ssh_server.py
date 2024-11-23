@@ -10,6 +10,11 @@ from main.rl_agent import RLTrainer
 import signal
 import sys
 from time import time
+import sys
+import os
+
+# Add the 'gash' directory to sys.path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
 
 # Load environment variables
 load_dotenv()
