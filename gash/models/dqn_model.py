@@ -7,7 +7,7 @@ from collections import deque
 class DQNModel(nn.Module):
     def __init__(self, state_size, action_size):
         super(DQNModel, self).__init__()
-        self.fc1 = nn.Linear(9, 128)
+        self.fc1 = nn.Linear(11, 128)
         self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, action_size)
 
@@ -24,13 +24,13 @@ class DQNAgent:
         self.target_model = DQNModel(state_size, action_size)
         self.update_target_network()
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.00025)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
         self.criterion = nn.MSELoss()
         self.epsilon = 1.0
         self.epsilon_decay = 0.995
         self.epsilon_min = 0.01
-        self.gamma = 0.95
-        self.memory = deque(maxlen=2000)
+        self.gamma = 0.99
+        self.memory = deque(maxlen=20000)
         self.batch_size = 64
 
     def update_target_network(self):

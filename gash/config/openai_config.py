@@ -57,7 +57,7 @@ class OpenAIConfig:
 
     @staticmethod
     def clean_output(output):
-        unwanted_lines = ["plaintext", "bash", "Last login", "Welcome to Ubuntu"]
+        unwanted_lines = ["plaintext", "bash", "Last login", "Welcome to Ubuntu", "shell"]
         for line in unwanted_lines:
             output = output.replace(line, "").strip()
 

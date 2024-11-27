@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     # Initialize and train the RL model
     trainer = RLTrainer(command_list, api_key=api_key)
-    trainer.train(episodes=1000)
+    trainer.train(episodes=500)
 
     # Load unseen commands for validation
     #unseen_command_list = os.listdir('data/unseen_commands')  # Assuming unseen commands are stored here

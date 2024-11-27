@@ -33,7 +33,6 @@ class UtilityCommands:
             "sh": self.command_nop,
             "kill": self.command_nop,
             "su": self.command_nop,
-            
         }
         self.state = state  # Shared state containing 'cwd', 'filesystem', 'user', etc.
 

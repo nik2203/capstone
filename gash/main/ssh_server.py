@@ -10,11 +10,7 @@ from main.rl_agent import RLTrainer
 import signal
 import sys
 from time import time
-import sys
-import os
-
-# Add the 'gash' directory to sys.path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
+import queue
 
 # Load environment variables
 load_dotenv()
@@ -26,7 +22,10 @@ if not api_key:
 logging.basicConfig(level=logging.DEBUG)
 paramiko.util.log_to_file("paramiko.log")
 
-# Graceful shutdown
+# Global rate limiter dictionary with lock
+command_times = {}
+command_lock = threading.Lock()
+
 def graceful_shutdown(signum, frame):
     logging.info("Shutting down SSH server gracefully...")
     sys.exit(0)
@@ -52,10 +51,18 @@ class SSHServer(paramiko.ServerInterface):
     def check_channel_shell_request(self, channel):
         return True
 
+def check_rate_limit(client_ip):
+    """Check if the client is within rate limits"""
+    with command_lock:
+        current_time = time()
+        if client_ip in command_times:
+            last_time = command_times[client_ip]
+            if current_time - last_time < 1:
+                return False
+        command_times[client_ip] = current_time
+        return True
+
 def log_command(client_ip, command, action, response):
-    """
-    Log the executed command, action, and response.
-    """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"{timestamp} - {client_ip} - Command: {command} - Action: {action} - Response: {response}\n"
     try:
@@ -65,9 +72,6 @@ def log_command(client_ip, command, action, response):
         logging.error(f"Error writing to log file: {e}")
 
 def handle_client(client_socket):
-    """
-    Handle an incoming SSH client connection.
-    """
     client_ip = client_socket.getpeername()[0]
     transport = paramiko.Transport(client_socket)
     transport.add_server_key(paramiko.RSAKey.generate(2048))
@@ -85,24 +89,16 @@ def handle_client(client_socket):
         transport.close()
         return
 
-    # Load command list and initialize CommandHandler
-    command_list = [f[:-3] for f in os.listdir('data/attack_commands') if f.endswith('.py') and f != "__init__.py"]
-    print(f"Loaded command list: {command_list}")
-    print(f"Total commands: {len(command_list)}")
-
     command_handler = CommandHandler(api_key=api_key)
+    command_list = [f[:-3] for f in os.listdir('data/attack_commands') if f.endswith('.py') and f != "__init__.py"]
     rl_trainer = RLTrainer(command_list, api_key=api_key)
     command_handler.set_rl_trainer(rl_trainer)
 
-    # Load the trained model
     try:
         rl_trainer.load_model("saved_model.pth")
-        print("Model loaded successfully.")
     except Exception as e:
-        print(f"Error loading model: {e}")
-        return
+        logging.error(f"Error loading model: {e}")
 
-    client_last_command_time = {}
     start_time = datetime.now()
     logging.info(f"Session started for {client_ip} at {start_time}")
 
@@ -112,12 +108,6 @@ def handle_client(client_socket):
 
         cmd_buffer = ''
         while True:
-            current_time = time()
-            if client_ip in client_last_command_time:
-                if current_time - client_last_command_time[client_ip] < 1:  # Rate-limit to 1 command per second
-                    channel.send("Too many commands. Slow down.\n")
-                    continue
-
             data = channel.recv(1024)
             if not data:
                 break
@@ -133,23 +123,39 @@ def handle_client(client_socket):
                         channel.send("logout\r\n")
                         break
                     elif command:
-                        action, output = command_handler.execute(command, client_ip)
-                        if not output:
-                            output = f"bash: {command}: command not found"
+                        # Check rate limit before processing command
+                        if not check_rate_limit(client_ip):
+                            channel.send("Too many commands. Slow down.\r\n$ ")
+                            continue
 
-                        # Send output to the client
-                        formatted_output = "\r\n".join(line.strip() for line in output.splitlines())
-                        channel.send(formatted_output + "\r\n")
+                        try:
+                            # Execute command and get response
+                            action, output = command_handler.execute(command, client_ip)
+                            
+                            # Handle the response based on action type
+                            if action == "not_found":
+                                channel.send(f"bash: {command}: command not found\r\n")
+                            elif output:
+                                # Format and send output
+                                formatted_output = output.replace('\n', '\r\n')
+                                if not formatted_output.endswith('\r\n'):
+                                    formatted_output += '\r\n'
+                                channel.send(formatted_output)
+                            
+                            # Log the command
+                            log_command(client_ip, command, action, output)
 
-                        
-                        # Log command and output
-                        log_command(client_ip, command, action, output)
-                        channel.send("$ ")
+                        except Exception as e:
+                            logging.error(f"Error executing command {command}: {str(e)}")
+                            channel.send(f"Error executing command: {str(e)}\r\n")
+                        finally:
+                            channel.send("$ ")
+
                 elif char == '\b' or ord(char) == 127:
                     if len(cmd_buffer) > 0:
                         cmd_buffer = cmd_buffer[:-1]
                         channel.send('\b \b')
-                elif char == '\t':  # Ignore tab completion
+                elif char == '\t':
                     pass
                 else:
                     cmd_buffer += char
@@ -162,15 +168,16 @@ def handle_client(client_socket):
     finally:
         end_time = datetime.now()
         logging.info(f"Session ended for {client_ip} at {end_time}. Duration: {end_time - start_time}")
+        # Clean up rate limiting data
+        with command_lock:
+            if client_ip in command_times:
+                del command_times[client_ip]
         if channel:
             channel.close()
         if transport:
             transport.close()
 
 def start_ssh_server(host="0.0.0.0", port=2222):
-    """
-    Start the SSH server and accept incoming client connections.
-    """
     try:
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -181,7 +188,9 @@ def start_ssh_server(host="0.0.0.0", port=2222):
         while True:
             client_socket, addr = server_socket.accept()
             logging.info(f"Connection from {addr} received.")
-            threading.Thread(target=handle_client, args=(client_socket,)).start()
+            client_thread = threading.Thread(target=handle_client, args=(client_socket,))
+            client_thread.daemon = True
+            client_thread.start()
 
     except Exception as e:
         logging.error(f"Error starting SSH server: {e}")

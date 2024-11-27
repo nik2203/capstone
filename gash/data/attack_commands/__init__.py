@@ -3,11 +3,12 @@ from .net import NetworkCommands
 from .sys import SystemCommands
 from .package import PackageCommands
 from .utility import UtilityCommands
+from .malware import MalwareCommands
 from config.openai_config import OpenAIConfig
 from utils.contextmgr import SessionContext
 import torch
 import time
-import yaml
+# import yaml
 import logging
 
 __all__ = ["FileSystemCommands", "NetworkCommands", "SystemCommands", "PackageCommands", "UtilityCommands"]
@@ -23,7 +24,6 @@ class CommandHandler:
         # Add OpenAI API and session context
         self.openai_config = OpenAIConfig(api_key)
         self.session_context = SessionContext()
-        self.personality = self.load_personality("utils/personality.yml")
 
         # Set up initial state and virtual filesystem
         self.cwd = "/"
@@ -36,6 +36,7 @@ class CommandHandler:
         self.system_commands = SystemCommands(self.state)
         self.package_commands = PackageCommands(self.state)
         self.utility_commands = UtilityCommands(self.state)
+        self.malware_commands = MalwareCommands(self.state)
 
         # Aggregate all commands into a single dictionary
         self.commands.update(self.filesystem_commands.commands)
@@ -43,15 +44,15 @@ class CommandHandler:
         self.commands.update(self.system_commands.commands)
         self.commands.update(self.package_commands.commands)
         self.commands.update(self.utility_commands.commands)
+        self.commands.update(self.malware_commands.commands)
 
         # Rule-based harmless commands
-        self.rule_based_allow = [
-            "ls", "ls -l", "ls -a", "cd", "mkdir", "rmdir", "touch", "cp", "mv", "rm",
-            "find", "basename", "dirname", "pwd", "cat", "head", "tail", "echo", "clear",
-            "history", "sort", "uniq", "wc", "tee", "uname", "hostname", "whoami", "w",
-            "who", "uptime", "id", "date", "free", "df", "nano", "vi", "less", "more",
-            "yes", "bash", "sh", "exit", "logout", "nohup"
-        ]
+        self.basic_commands = {
+            'ls', 'cd', 'pwd', 'mkdir', 'rmdir', 'touch', 'rm',
+            'cp', 'mv', 'cat', 'echo', 'help', 'ps', 'ps aux',
+            'whoami', 'id', 'df', 'du', 'date', 'ping', 'wget', 'curl', 'traceroute',
+            'start', 'start3', 'go.sh', 'clear'
+        }
 
     # RL trainer will be set after initialization to avoid circular dependency
         self.rl_trainer = None
@@ -60,32 +61,49 @@ class CommandHandler:
         """Set the RLTrainer instance after initialization to avoid circular dependency."""
         self.rl_trainer = rl_trainer
 
-    def load_personality(self, path):
-        """Load system personality traits from a YAML file."""
+    """def load_personality(self, path):
+        # Load system personality traits from a YAML file
         with open(path, "r") as file:
             data = yaml.safe_load(file)
-        return data.get("personality", {}).get("prompt", "")
+        return data.get("personality", {}).get("prompt", "")"""
 
     def execute(self, command, client_ip):
-        cmd_parts = command.strip().split()
-        cmd = cmd_parts[0] if cmd_parts else ''
-        
-        logging.info(f"Processing command: {cmd} from IP: {client_ip}")
+        """Process and execute the command"""
+        try:
+            cmd_parts = command.strip().split()
+            if not cmd_parts:
+                return "empty", ""
 
-        if cmd in self.commands:
-            if cmd in self.rule_based_allow:
-                logging.info(f"Rule-based decision: Always allow command '{cmd}'.")
-                return "allow", self.commands[cmd](cmd_parts, client_ip)
+            cmd = cmd_parts[0].lower()
+            logging.debug(f"Processing command: {cmd}, Arguments: {cmd_parts}")
 
-            action = self.get_rl_model_decision(cmd)
-            static_response = self.commands[cmd](cmd_parts, client_ip)
-            logging.info(f"RL Model action: {action}, Static response: {static_response}")
+            # Check if the command exists in our handlers
+            if cmd in self.commands:
+                try:
+                    # For basic filesystem and system commands, execute directly
+                    if cmd in self.basic_commands:
+                        response = self.commands[cmd](cmd_parts, client_ip)
+                        return "allow", response if response is not None else ""
 
-            return self.handle_action(action, cmd, cmd_parts, client_ip)
-        
-        else:
-            return "not_found", f"-bash: {command}: command not found\n"
+                    # For other commands, use RL model if available
+                    if self.rl_trainer:
+                        action = self.get_rl_model_decision(cmd)
+                        return self.handle_action(action, cmd, cmd_parts, client_ip)
+                    else:
+                        # If no RL trainer, execute command directly
+                        response = self.commands[cmd](cmd_parts, client_ip)
+                        return "allow", response if response is not None else ""
+                        
+                except Exception as e:
+                    logging.error(f"Error executing command {cmd}: {str(e)}")
+                    return "error", f"Error executing command: {str(e)}\n"
+            
+            # Command not found
+            return "not_found", f"bash: {cmd}: command not found\n"
 
+        except Exception as e:
+            logging.error(f"Error in command execution: {str(e)}")
+            return "error", f"Error executing command: {str(e)}\n"
     
     def reset_context(self):
         self.session_context.reset_context()
@@ -114,14 +132,13 @@ class CommandHandler:
             static_response = self.commands[cmd](cmd_parts, client_ip)
             if static_response == "":
                 return "allow", ""  # Return an empty string for successful silent commands
-            print(cmd)
-            dynamic_response = self.get_dynamic_openai_response(cmd, static_response)
-            return "allow", dynamic_response  # Return action and dynamic response
+            #dynamic_response = self.get_dynamic_openai_response(cmd, static_response)
+            return "allow", static_response  # Return action and dynamic response
 
         elif action_name == "block":
             static_response = self.commands[cmd](cmd_parts, client_ip)
-            dynamic_response = self.get_dynamic_openai_response(cmd, static_response)  # Go through API for context
-            return "block", f"{cmd}: Permission denied"
+            #dynamic_response = self.get_dynamic_openai_response(cmd, static_response)  # Go through API for context
+            return "block", f"{cmd}: Permission denied\n"
         
         elif action_name in ["delay", "fake"]:
                 if action_name == "delay":
@@ -133,8 +150,8 @@ class CommandHandler:
         
         elif action_name == "insult":
             static_response = self.commands[cmd](cmd_parts, client_ip)
-            dynamic_response = self.get_dynamic_openai_response(cmd, static_response) 
-            return "insult", "Nice try"
+            #dynamic_response = self.get_dynamic_openai_response(cmd, static_response) 
+            return "insult", "Nice try\n"
 
     def get_dynamic_openai_response(self, cmd, static_response):
         try:
@@ -148,12 +165,12 @@ class CommandHandler:
             return "error", "Error processing the command dynamically."
 
     def create_prompt(self, command, static_response):
-        if not self.personality:
+        """if not self.personality:
             logging.error("Personality not loaded. Check the YAML file.")
             return f"Error: Personality data missing."
 
         if not self.session_context.has_personality():
-            self.session_context.set_personality(self.personality)
+            self.session_context.set_personality(self.personality)"""
 
         context = self.session_context.get_context()
 
